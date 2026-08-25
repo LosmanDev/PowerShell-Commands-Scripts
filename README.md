@@ -4,6 +4,8 @@
 # Displays detailed configuration information about the computer, including OS version, memory, and network adapters.
 systeminfo
 
+Get-ComputerInfo
+
 # Quickly checks the version of Windows you are running.
 winver
 
@@ -33,6 +35,9 @@ $ExcludedProfiles = @("admin.losman", "liban.osman", "Public", "Default"); Get-C
 ```bash
 # ###################################################################################################################
   
+  # Performs a detailed scan of the system image for corruption.
+ DISM /Online /Cleanup-Image /RestoreHealth
+
   # System File Checker
  sfc /scannow
 
@@ -42,9 +47,6 @@ $ExcludedProfiles = @("admin.losman", "liban.osman", "Public", "Default"); Get-C
   # Quickly checks if there is any corruption in the system image.
  DISM /Online /Cleanup-Image /ScanHealth
 
-  # Performs a detailed scan of the system image for corruption.
- DISM /Online /Cleanup-Image /RestoreHealth
-
   # Repairs detected corruption in the system image by downloading and replacing damaged files.
  DISM /Online /Cleanup-Image /StartComponentCleanup
 
@@ -53,9 +55,9 @@ $ExcludedProfiles = @("admin.losman", "liban.osman", "Public", "Default"); Get-C
 
  ################ Commands bundled ###############
 
-Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile', '-Command', "sfc /scannow; DISM /Online /Cleanup-Image /StartComponentCleanup; DISM /Online /Cleanup-Image /RestoreHealth; shutdown /r /t 60 /c 'Restart Initiated.'"
+Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile', '-Command', 'DISM /Online /Cleanup-Image /RestoreHealth; sfc /scannow; DISM /Online /Cleanup-Image /StartComponentCleanup; Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $f=New-Object Windows.Forms.Form; $f.Width=350; $f.Height=150; $f.StartPosition=''CenterScreen''; $f.TopMost=$true; $f.Text=''Please save your work''; $f.ControlBox=$false; $l=New-Object Windows.Forms.Label; $l.AutoSize=$true; $l.Font=New-Object Drawing.Font(''Segoe UI'', 14); $l.Top=40; $l.Left=50; $f.Controls.Add($l); $f.Show(); for($i=120; $i -gt 0; $i--){$l.Text=''Restarting in ''+$i+'' seconds...''; $f.Refresh(); Start-Sleep 1}; Restart-Computer -Force'
 
-Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile', '-Command', 'sfc /scannow; DISM /Online /Cleanup-Image /StartComponentCleanup; DISM /Online /Cleanup-Image /RestoreHealth; Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $f=New-Object Windows.Forms.Form; $f.Width=350; $f.Height=150; $f.StartPosition=''CenterScreen''; $f.TopMost=$true; $f.Text=''Please save your work''; $f.ControlBox=$false; $l=New-Object Windows.Forms.Label; $l.AutoSize=$true; $l.Font=New-Object Drawing.Font(''Segoe UI'', 14); $l.Top=40; $l.Left=50; $f.Controls.Add($l); $f.Show(); for($i=120; $i -gt 0; $i--){$l.Text=''Restarting in ''+$i+'' seconds...''; $f.Refresh(); Start-Sleep 1}; Restart-Computer -Force'
+Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile', '-Command', 'DISM /Online /Cleanup-Image /RestoreHealth; sfc /scannow; DISM /Online /Cleanup-Image /StartComponentCleanup; Stop-Service -Name ''SysMain'' -Force; Set-Service -Name ''SysMain'' -StartupType Disabled; Optimize-Volume -DriveLetter C -ReTrim -Verbose; Clear-RecycleBin -Force; Remove-Item -Path "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue; Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $f=New-Object Windows.Forms.Form; $f.Width=350; $f.Height=150; $f.StartPosition=''CenterScreen''; $f.TopMost=$true; $f.Text=''Please save your work''; $f.ControlBox=$false; $l=New-Object Windows.Forms.Label; $l.AutoSize=$true; $l.Font=New-Object Drawing.Font(''Segoe UI'', 14); $l.Top=40; $l.Left=50; $f.Controls.Add($l); $f.Show(); for($i=120; $i -gt 0; $i--){$l.Text=''Restarting in ''+$i+'' seconds...''; $f.Refresh(); Start-Sleep 1}; Restart-Computer -Force'
 
 ################ tail recent DISM entries###############
 Get-Content -Path C:\Windows\Logs\DISM\dism.log -Tail 200
@@ -66,6 +68,12 @@ Get-Content -Path C:\Windows\Logs\CBS\CBS.log -Tail 200
 shutdown /r /t 60 /c "Restart Initiated."
 shutdown /r /t 3600 /c "System maintenance in progress. This device will restart automatically in 60 minutes."
 
+start ms-cxh:localonly # Create a local windows account
+start ms-availablenetworks: # Access Network from CMD
+start ms-settings:windowsupdate # Access updates
+start ms-settings:workplace # Intune Sync
+shutdown /r /o /f /t 0 # Windows Recovery Environment (WinRE),
+shutdown /r /fw /t 0 # Motherboard Firmware Interface (UEFI / BIOS)
 
 # ###################################################################################################################
 ```
@@ -90,7 +98,7 @@ Get-Process | Sort-Object CPU -Descending | Select-Object -First 10 Name, CPU, I
 
 "POWERPNT","EXCEL","WINWORD","OneDrive","OUTLOOK","ms-teams","Teams","msedge","chrome"
 
-"Code" | ForEach-Object { Get-Process -Name $_ -ErrorAction SilentlyContinue | ForEach-Object { try { Stop-Process -Id $_.Id -Force -ErrorAction Stop; Write-Host "Terminated: $($_.Name) (PID $($_.Id))" } catch { Write-Host "Failed to terminate: $($_.Name) (PID $($_.Id))" } } }
+"POWERPNT","EXCEL","WINWORD","OneDrive","OUTLOOK","ms-teams","Teams","msedge","chrome" | ForEach-Object { Get-Process -Name $_ -ErrorAction SilentlyContinue | ForEach-Object { try { Stop-Process -Id $_.Id -Force -ErrorAction Stop; Write-Host "Terminated: $($_.Name) (PID $($_.Id))" } catch { Write-Host "Failed to terminate: $($_.Name) (PID $($_.Id))" } } }
 
 
 ################ Reliability Monitor ###############
@@ -126,7 +134,6 @@ cd "$env:USERPROFILE\downloads"
 # Downloads size check
 
 Get-ChildItem "$env:USERPROFILE\Downloads" -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum | Select-Object @{N='Folder';E={"$env:USERPROFILE\Downloads"}}, @{N='SizeMB';E={[math]::Round($_.Sum / 1MB, 2)}}, @{N='SizeGB';E={[math]::Round($_.Sum / 1GB, 2)}}
-
 
 # Checks the file system and disk for errors.
  echo y | chkdsk /f; echo y | chkdsk /r
@@ -199,9 +206,11 @@ ping -f -l 1472 8.8.8.8; ping -f -l 1464 8.8.8.8; ping -f -l 1450 8.8.8.8; ping 
 
 netsh interface ipv4 show subinterfaces
 
-netsh interface ipv4 set subinterface "InterfaceName" mtu=YourMTUValue store=persistent
+netsh interface ipv4 set subinterface "Ethernet 5" mtu=1395 store=persistent
 
-netsh interface ipv4 set subinterface "Wi-Fi" mtu=1390 store=persistent
+# Test Intune connection
+Test-NetConnection -ComputerName manage.microsoft.com -Port 443
+Test-NetConnection -ComputerName enterpriseregistration.windows.net -Port 443
  
  # ###################################################################################################################
 ```
@@ -213,37 +222,25 @@ netsh interface ipv4 set subinterface "Wi-Fi" mtu=1390 store=persistent
  wmic qfe list # Lists all installed Windows updates (useful for checking patch status).
  gpresult /h # List all the policies applied and security groups in HTML.
  dsregcmd /status # Confirm the Device is Enrolled in Intune.
- dsregcmd /refreshprt #Forces the device to immediately refresh its Primary Refresh Token (PRT) re-establishing authentication state
- 
- $env:windir\system32\deviceenroller.exe /c /AutoEnrollMDMUsingAADDeviceCredential # Enroll system in to Intune requires a Hybrid Azure AD Joined architecture.
+ dsregcmd /refreshprt # Forces the device to immediately refresh its Primary Refresh Token (PRT) re-establishing authentication state
+ dsregcmd /forcerecovery
 
- $env:windir\system32\deviceenroller.exe /c /AutoEnrollMDM # utilizes Primary Refresh Token (PRT) endpoints configured as AzureAdJoined:YES and DomainJoined:NO.
+& "$env:windir\system32\deviceenroller.exe" /c /AutoEnrollMDM # utilizes Primary Refresh Token (PRT) endpoints configured as AzureAdJoined:YES and DomainJoined:NO.
 
 ```
 ```powershell
  # Filter specifically for Warning and Error events:
  Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-AAD/Operational','Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin'; Level=2,3} -MaxEvents 10 | Select-Object TimeCreated, Id, LogName, Message | Format-List
 
-
 # Force Windows device to immediately check in with Microsoft Intune and sync win32 apps and compliance
- Get-ScheduledTask | ? {$_.TaskName -eq 'PushLaunch'} | % { $_ | Start-ScheduledTask; sleep 2; $_ | Get-ScheduledTaskInfo | select TaskName, Last* }
- $Shell = New-Object -ComObject Shell.Application; $Shell.open("intunemanagementextension://syncapp")
- $Shell = New-Object -ComObject Shell.Application; $Shell.open("intunemanagementextension://synccompliance")
+$Shell.open("intunemanagementextension://syncapp"); $Shell.open("intunemanagementextension://synccompliance")
 
- Get-ScheduledTask | ? {$_.TaskName -eq 'PushLaunch'} | % { $_ | Start-ScheduledTask; sleep 2; $_ | Get-ScheduledTaskInfo | select TaskName, Last* }; $Shell = New-Object -ComObject Shell.Application; $Shell.open("intunemanagementextension://syncapp"); $Shell.open("intunemanagementextension://synccompliance")
+# Trigger Native OMA-DM (CSPs, Policies, Certificates)
+Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\*" | Where-Object TaskName -match "Schedule #3" | Start-ScheduledTask
 
-Test-NetConnection -ComputerName manage.microsoft.com -Port 443
-Test-NetConnection -ComputerName enterpriseregistration.windows.net -Port 443
-
-
-```
-```bash 
-start ms-cxh:localonly # Create a local windows account
-start ms-availablenetworks: # Access Network from CMD
-start ms-settings:windowsupdate # Access updates
-start ms-settings:workplace # Intune Sync
-shutdown /r /o /f /t 0 # Windows Recovery Environment (WinRE),
-shutdown /r /fw /t 0 # Motherboard Firmware Interface (UEFI / BIOS)
+# Trigger Intune Management Extension (Win32 Apps, PowerShell Scripts, Remediations)
+Restart-Service -Name "IntuneManagementExtension" -Force -ErrorAction SilentlyContinue
+Get-WinEvent -LogName "Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin" -MaxEvents 5
 
 
  # ###################################################################################################################
@@ -267,6 +264,21 @@ shutdown /r /fw /t 0 # Motherboard Firmware Interface (UEFI / BIOS)
 
 # Event Viewer Battery reports [524 Critical]
  Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='Microsoft-Windows-Kernel-Power'; ID=@(524)} | Select-Object TimeCreated, Id, @{Name='Context'; Expression={switch($_.Id){524{'Critical Battery Depletion'}}}}, Message | Format-Table -AutoSize -Wrap
+
+# Hardware state and identify Plug and Play (PnP) errors
+Get-PnpDevice -Class Camera, Image
+Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -match '^USB' -and $_.Status -ne 'OK' }
+
+# Cleared the corrupted instances 
+Get-PnpDevice -Class Camera | Where-Object Status -eq 'Unknown' | ForEach-Object { pnputil /remove-device $_.InstanceId }. 
+<# 
+Disconnect the external USB dock or hub from the Surface Laptop.
+Sever external power to the dock/hub for 15 seconds to drain residual capacitor charge.
+Connect a single camera directly into a native port on the Laptop, bypassing all external routing.
+Reset Video Subsystem Force clear the Windows video routing service.
+#>
+Restart-Service -Name FrameServer -Force
+pnputil /scan-devices
 
  # ###################################################################################################################
 ```
@@ -301,7 +313,7 @@ mmsys.cpl # Audio
 compmgmt.msc #computer management
 sysdm.cpl # System props (Add more RAM)
 appwiz.cpl # control panel applications
-
+certlm.msc # Certificates
 
 # ###################################################################################################################
 ```
@@ -328,37 +340,9 @@ Get-Service | Where-Object { $_.Name -match "csc_umbrellaagent|stAgentSvc|CSFalc
 
 Stop-Service -Name "csc_umbrellaagent" -Force -EA SilentlyContinue; sc.exe delete "csc_umbrellaagent" | Out-Null; Remove-Item -Path "HKLM:\SYSTEM\CurrentControlSet\Services\csc_umbrellaagent" -Recurse -Force -EA SilentlyContinue
 
-################ Scan Intune Extension Logs for specific ID's with error messages. ###############
-'4aade9c2-d76b-4a2e-9caf-58201c341f4d' = 'Umbrella'; 
-'2e4c26b7-12f1-4a56-9c22-6ae0d66736ea' = 'Netskope';
-'f5c225e3-9064-4caf-9c52-0f3a8f375770' = 'CsFalcon'; 
-'9df64576-1eff-47b6-886f-00ce74f51b27' = 'Company Portal'
+# ############### Remove Configmgr/SCCM ###############
 
-$AppIDs = @('f74971b0-13e6-42c8-a52d-1f1336e78647', '5e811505-aa71-4046-815d-68d931bfbe92')
-$AppIDs | % { $i=$_; sls $i 'C:\ProgramData\Microsoft\IntuneManagementExtension\Logs\*.log' -Context 0,20 | % { [pscustomobject]@{ID=$i; File=$_.Filename; Match=$_.Line.Trim(); Context=($_.Context.PostContext | ? {$_ -match 'ExitCode|Error|Fail'} | Out-String).Trim()} } | select -last 5 } | fl
-
-
-# ############### Checks status for the AppID ###############
-
-$scanApp = @{
-    'f74971b0-13e6-42c8-a52d-1f1336e78647' = 'Win 24H2 Installer'
-    '5e811505-aa71-4046-815d-68d931bfbe92' = 'Win 24H2 Feature Update'
-}
-$s=@{1000='Success';2000='Pending';3000='In Progress';4000='Failed'}; gci 'HKLM:\SOFTWARE\Microsoft\IntuneManagementExtension\Win32Apps' -Rec | ? {$scanApp.ContainsKey($_.PSChildName)} | % { $r=($_|gp -Name EnforcementStateMessage -ea 0).EnforcementStateMessage; $j=if($r){$r|ConvertFrom-Json}; $c=$j.EnforcementState; $e=$j.ErrorCode; if(!$c){$c=$_.GetValue('EnforcementState');$e=$_.GetValue('LastErrorCode')}; [pscustomobject]@{App=$scanApp[$_.PSChildName]; Status=$s[[int]$c]; Err=$e; Time=$_.GetValue('LastUpdatedTimeUtc'); ID=$_.PSChildName} } | ft -a
-
-# ############### Reset Intune Service to re-install AppID ###############
-
-$AppIDs = @('f74971b0-13e6-42c8-a52d-1f1336e78647', '5e811505-aa71-4046-815d-68d931bfbe92')
-$r='HKLM:\SOFTWARE\Microsoft\IntuneManagementExtension\Win32Apps'; $AppIDs | % { $d=$_; write-host "Scanning $d" -f Cyan; $t=gci $r -Rec -ea 0 | ? {$_.PSChildName -eq $d}; if($t){ $t | % { write-host "Deleting $($_.Name)" -f Yellow; ri $_.PSPath -Rec -Force } } else { write-host "No keys found" -f Gray } }; write-host "Restarting Service..." -f Green; Restart-Service "IntuneManagementExtension" -Force
-
-# ############### Stops service, kills history, hunts down hidden GRS keys for both apps, and restarts service ###############
-
-Stop-Service "IntuneManagementExtension" -Force -ea 0; $t=@('f74971b0-13e6-42c8-a52d-1f1336e78647','5e811505-aa71-4046-815d-68d931bfbe92'); $r="HKLM:\SOFTWARE\Microsoft\IntuneManagementExtension\Win32Apps"; $t | % { $id=$_; Write-Host "Cleaning $id" -f Cyan; gci $r -Rec -ea 0 | ? {$_.PSChildName -eq $id} | ri -Rec -Force; gci $r | % { gci "$($_.PSPath)\GRS" -ea 0 | ? {$_.PSChildName -eq $id} | ri -Rec -Force } }; Start-Service "IntuneManagementExtension"
-
-# ############### App ID Log Error Tracker ###############
-
-$AppID = '62e36920-5c12-47db-9797-81019a68ff7c'
-sls $AppID 'C:\ProgramData\Microsoft\IntuneManagementExtension\Logs\*.log' -Context 0,15 | % { $c=$_.Context.PostContext | ? {$_ -match 'ExitCode|Error|Fail|GRS'} | Out-String; if($c){ [pscustomobject]@{Log=$_.Filename; Match=$_.Line.Trim().Substring(0, [math]::Min(80,$_.Line.Length)); Context=$c.Trim()} } } | fl
+if (Test-Path "C:\Windows\ccmsetup\ccmsetup.exe") { Start-Process -FilePath "C:\Windows\ccmsetup\ccmsetup.exe" -ArgumentList "/uninstall" -Wait -NoNewWindow }
 
 # ############### Force Run (Installer Only) ###############
 
@@ -372,6 +356,9 @@ $e="C:\Program Files (x86)\Microsoft Intune Management Extension\AgentExecutor.e
 Function Reset-Intune { Write-Host ">>> RESETTING INTUNE AGENT <<<"; Stop-Service "IntuneManagementExtension" -Force -ErrorAction SilentlyContinue; "AgentExecutor", "Microsoft.Management.Services.IntuneWindowsAgent" | ForEach-Object { Get-Process $_ -ErrorAction SilentlyContinue | Stop-Process -Force }; Remove-Item "C:\ProgramData\Microsoft\IntuneManagementExtension" -Recurse -Force -ErrorAction SilentlyContinue; dsregcmd /refreshprt; Start-Service "IntuneManagementExtension"; Get-ScheduledTask | Where-Object { $_.TaskName -eq 'PushLaunch' } | Start-ScheduledTask; Write-Host ">>> DONE. Sync Triggered. <<<" }; Reset-Intune
 
 # ###################################################################################################################
+
+# Defender compliance script
+ https://call4cloud.nl/FixWSCDefender.ps1
 
 # ############### Chrome Bookmarks ###############
 
@@ -407,20 +394,13 @@ Set-Location "C:\Program Files\Common Files\Microsoft Shared\ClickToRun"
 .\OfficeC2RClient.exe /changesetting Channel=MonthlyEnterprise
 .\OfficeC2RClient.exe /update user
 
+$Monthly = "C:\Program Files\Common Files\Microsoft Shared\ClickToRun\OfficeC2RClient.exe"; & $Monthly /changesetting Channel=MonthlyEnterprise; & $Monthly /update user
+
+"POWERPNT","EXCEL","WINWORD","OUTLOOK" | ForEach-Object { Get-Process -Name $_ -ErrorAction SilentlyContinue | ForEach-Object { try { Stop-Process -Id $_.Id -Force -ErrorAction Stop; Write-Host "Terminated: $($_.Name) (PID $($_.Id))" } catch { Write-Host "Failed to terminate: $($_.Name) (PID $($_.Id))" } } }
 
 # ############################## Outlook Legacy Room Finder ##############################
 
 $s=(Get-CimInstance Win32_UserProfile | ? LocalPath -match "mike.kao").SID; $p1="Registry::HKEY_USERS\$s\SOFTWARE\Policies\Microsoft\Office\16.0\Outlook\Options\Calendar"; $p2="Registry::HKEY_USERS\$s\SOFTWARE\Microsoft\Office\16.0\Outlook\Preferences"; if(!(Test-Path $p1)){New-Item $p1 -Force | Out-Null}; New-ItemProperty -Path $p1 -Name "ShowLegacyRoomFinder" -Value 1 -PropertyType DWord -Force | Out-Null; if(!(Test-Path $p2)){New-Item $p2 -Force | Out-Null}; New-ItemProperty -Path $p2 -Name "RoomFinderForceWebView" -Value 0 -PropertyType DWord -Force | Out-Null
-
-
-# ############################## Intune Log collection ##############################
-
-md C:\temp\odc
-cd c:\temp\odc
-wget https://aka.ms/intunePS1 -outfile IntuneODCStandAlone.ps1
-wget https://aka.ms/intuneXML -outfile Intune.xml
-Set-ExecutionPolicy Bypass
-.\IntuneODCStandAlone.ps1
 
 # ############################## Edge Fix ##############################
 
@@ -438,13 +418,6 @@ Start-Process msiexec.exe -ArgumentList '/i "C:\Users\ray.nunez\Downloads\Micros
 https://www.microsoft.com/en-us/edge/business/download?form=MA13FJ
 
 # ############################## Teams Add-in Fix ##############################
-
-%LocalAppData%\Publishers\8wekyb3d8bbwe\TeamsSharedConfig\
-
-Create file: app_switcher_settings.json
-Paste: {"defaultApp":1,"cohort":"","webAccountId_AAD":"","cohortStage":"","userId_AAD":"","previousT1MachineId":"","previousT1SessionId":""}
-
-Reboot outlook & Teams also repair add in settings > apps > teams addin 
 
 Set-Location -Path "$env:LOCALAPPDATA\Publishers\8wekyb3d8bbwe\TeamsSharedConfig"
 
@@ -477,13 +450,13 @@ Add-Type -A System.Windows.Forms,System.Drawing; function n($m){$b=New-Object Sy
 ################ Surface Laptop 5 ############### 
 # https://www.microsoft.com/en-us/download/details.aspx?id=104679
 
-Add-Type -A System.Windows.Forms,System.Drawing; function n($m){$b=New-Object System.Windows.Forms.NotifyIcon;$b.Icon=[System.Drawing.SystemIcons]::Information;$b.Visible=$true;$b.ShowBalloonTip(5000,'Software Install',$m,[System.Windows.Forms.ToolTipIcon]::Info);sleep -m 600;$b.Dispose()}; $u='https://download.microsoft.com/download/68992368-8d70-4231-a9e4-23dfaede832b/SurfaceLaptop5_Win11_22631_26.043.30647.0.msi'; $p="$env:TEMP\surface5_update.msi"; n 'Downloading Surface Laptop 5 Drivers...'; (New-Object System.Net.WebClient).DownloadFile($u, $p); n 'Installing Surface Laptop 5 Drivers...'; start msiexec -Arg "/i `"$p`" /qn /norestart" -Wait; ri $p -Force; n 'Surface Laptop 5 Drivers Installed Successfully'; sleep 2
+Add-Type -A System.Windows.Forms,System.Drawing; function n($m){$b=New-Object System.Windows.Forms.NotifyIcon;$b.Icon=[System.Drawing.SystemIcons]::Information;$b.Visible=$true;$b.ShowBalloonTip(5000,'Software Install',$m,[System.Windows.Forms.ToolTipIcon]::Info);sleep -m 600;$b.Dispose()}; $u='https://download.microsoft.com/download/68992368-8d70-4231-a9e4-23dfaede832b/SurfaceLaptop5_Win11_22631_26.072.18051.0.msi'; $p="$env:TEMP\surface5_update.msi"; n 'Downloading Surface Laptop 5 Drivers...'; (New-Object System.Net.WebClient).DownloadFile($u, $p); n 'Installing Surface Laptop 5 Drivers...'; start msiexec -Arg "/i `"$p`" /qn /norestart" -Wait; ri $p -Force; n 'Surface Laptop 5 Drivers Installed Successfully'; sleep 2
 
 
 ################ Surface Laptop 6 ############### 
 # https://www.microsoft.com/en-us/download/details.aspx?id=105946
 
-Add-Type -A System.Windows.Forms,System.Drawing; function n($m){$b=New-Object System.Windows.Forms.NotifyIcon;$b.Icon=[System.Drawing.SystemIcons]::Information;$b.Visible=$true;$b.ShowBalloonTip(5000,'Software Install',$m,[System.Windows.Forms.ToolTipIcon]::Info);sleep -m 600;$b.Dispose()}; $u='https://download.microsoft.com/download/a53facb0-c939-4302-a0d3-53aa18217230/SurfaceLaptop6forBusiness_Win11_22631_26.060.411.0.msi'; $p="$env:TEMP\surface6_update.msi"; n 'Downloading Surface Laptop 6 Drivers...'; (New-Object System.Net.WebClient).DownloadFile($u, $p); n 'Installing Surface Laptop 6 Drivers...'; start msiexec -Arg "/i `"$p`" /qn /norestart" -Wait; ri $p -Force; n 'Surface Laptop 6 Drivers Installed Successfully'; sleep 2
+Add-Type -A System.Windows.Forms,System.Drawing; function n($m){$b=New-Object System.Windows.Forms.NotifyIcon;$b.Icon=[System.Drawing.SystemIcons]::Information;$b.Visible=$true;$b.ShowBalloonTip(5000,'Software Install',$m,[System.Windows.Forms.ToolTipIcon]::Info);sleep -m 600;$b.Dispose()}; $u='https://download.microsoft.com/download/a53facb0-c939-4302-a0d3-53aa18217230/SurfaceLaptop6forBusiness_Win11_22631_26.072.19202.0.msi'; $p="$env:TEMP\surface6_update.msi"; n 'Downloading Surface Laptop 6 Drivers...'; (New-Object System.Net.WebClient).DownloadFile($u, $p); n 'Installing Surface Laptop 6 Drivers...'; start msiexec -Arg "/i `"$p`" /qn /norestart" -Wait; ri $p -Force; n 'Surface Laptop 6 Drivers Installed Successfully'; sleep 2
 
 ################ Surface Laptop 7 ############### 
 # https://www.microsoft.com/en-us/download/details.aspx?id=108014
@@ -494,22 +467,11 @@ Add-Type -A System.Windows.Forms,System.Drawing; function n($m){$b=New-Object Sy
 
 Add-Type -A System.Windows.Forms,System.Drawing; function n($m){$b=New-Object System.Windows.Forms.NotifyIcon;$b.Icon=[System.Drawing.SystemIcons]::Information;$b.Visible=$true;$b.ShowBalloonTip(5000,'Software Install',$m,[System.Windows.Forms.ToolTipIcon]::Info);sleep -m 600;$b.Dispose()}; $u='https://dl.google.com/chrome/install/latest/chrome_installer.exe'; $p="$env:TEMP\chrome_installer.exe"; n 'Downloading Google Chrome...'; (New-Object System.Net.WebClient).DownloadFile($u, $p); n 'Installing Google Chrome...'; start $p -Arg '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART' -Wait; ri $p -Force; n 'Google Chrome Installed Successfully'; sleep 2
 
-
-# Surface Drivers extraction for autounattend
-msiexec /a "C:\Users\liban.osman\Downloads\SurfaceLaptop5_Win11_22631_26.043.30647.0.msi" /qb TARGETDIR="C:\Extracted\Surface5"
-msiexec /a "C:\Users\liban.osman\Downloads\SurfaceLaptop6forBusiness_Win11_22631_26.060.411.0.msi" /qb TARGETDIR="C:\Extracted\Surface6"
-msiexec /a "C:\Users\liban.osman\Downloads\SurfaceLaptop7withIntel_Win11_22631_26.044.42206.0.msi" /qb TARGETDIR="C:\Extracted\Surface7"
-
-xcopy C:\Extracted\Surface5\SurfaceUpdate\* D:\Drivers\Surface5\ /E /H /C /I /Y
-xcopy C:\Extracted\Surface6\SurfaceUpdate\* D:\Drivers\Surface6\ /E /H /C /I /Y
-xcopy C:\Extracted\Surface7\SurfaceUpdate\* D:\Drivers\Surface7\ /E /H /C /I /Y
-
 ```
-
 # Zsh/Bash Commands
 
 ```bash
-###################################################################################################################
+############################################# MAC OS Commands   ######################################################################
 
 rm ~/Library/Preferences/com.apple.finder.plist
 
@@ -518,6 +480,9 @@ killall Finder
 
 # System capacity
 df -h /   
+
+# Display system memory pressure statistics
+memory_pressure
 
 # print the top 20 largest ghost files
 sudo lsof +L1 | awk '{print $1, $2, $3, $7, $10}' | sort -nk 4 | tail -n 20
@@ -576,5 +541,10 @@ sudo jamf mdm -userLevelMdm
 system_profiler SPHardwareDataType 
 
 # Displays system uptime and load averages.
+
+# Display the installed macOS version.
+sw_vers
+
+# Device uptime 
 uptime 
 ```
