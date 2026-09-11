@@ -6,6 +6,8 @@ systeminfo
 
 Get-ComputerInfo
 
+Get-MpComputerStatus
+
 # Quickly checks the version of Windows you are running.
 winver
 
@@ -215,7 +217,7 @@ Test-NetConnection -ComputerName enterpriseregistration.windows.net -Port 443
  # ###################################################################################################################
 ```
 
-### Group Policy and Intune Policies
+### Group Policy and Intune Policies / Troubleshooting 
 
 ```bash
  gpupdate /force # Forces a refresh of Group Policy settings.
@@ -233,15 +235,34 @@ Test-NetConnection -ComputerName enterpriseregistration.windows.net -Port 443
  Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-AAD/Operational','Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin'; Level=2,3} -MaxEvents 10 | Select-Object TimeCreated, Id, LogName, Message | Format-List
 
 # Force Windows device to immediately check in with Microsoft Intune and sync win32 apps and compliance
-$Shell.open("intunemanagementextension://syncapp"); $Shell.open("intunemanagementextension://synccompliance")
+$Shell = New-Object -ComObject Shell.Application; $Shell.Open("intunemanagementextension://syncapp"); $Shell.Open("intunemanagementextension://synccompliance"); [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($Shell)
+
+Start-Process "intunemanagementextension://syncapp"; Start-Sleep -Seconds 2; Start-Process "intunemanagementextension://synccompliance"
+
+Restart-Service -Name "IntuneManagementExtension" -Force 
 
 # Trigger Native OMA-DM (CSPs, Policies, Certificates)
-Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\*" | Where-Object TaskName -match "Schedule #3" | Start-ScheduledTask
+$Tasks = Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\*" | Where-Object { $_.TaskName -match '^Schedule #3(\s|$)' }; $Tasks | Select-Object TaskPath, TaskName, State, @{Name="RunAs";Expression={$_.Principal.UserId}}; $Tasks | Start-ScheduledTask
 
-# Trigger Intune Management Extension (Win32 Apps, PowerShell Scripts, Remediations)
-Restart-Service -Name "IntuneManagementExtension" -Force -ErrorAction SilentlyContinue
-Get-WinEvent -LogName "Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin" -MaxEvents 5
+# Device Management Logs
+Get-WinEvent -LogName "Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin" -MaxEvents 5 | Select-Object TimeCreated, Id, LevelDisplayName, Message | Format-List
 
+$Start=Get-Date; $Tasks=Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\*" | Where-Object {$_.TaskName -match '^Schedule #3(\s|$)'}; $Tasks | Start-ScheduledTask; Start-Sleep 10; Get-WinEvent -FilterHashtable @{LogName="Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin";StartTime=$Start} | Select-Object TimeCreated,Id,LevelDisplayName,Message | Format-List
+
+<#
+Assign one of the following to $Log
+IntuneManagementExtension.log - IME check-ins, policy requests, processing, and reporting
+AppWorkload.log               - Win32 application deployment activity
+AppActionProcessor.log        - Detection and applicability checks
+HealthScripts.log             - Remediation processing
+#>
+$Log = "IntuneManagementExtension.log"; $Path = "$env:ProgramData\Microsoft\IntuneManagementExtension\Logs\$Log"; Get-Item $Path | Select-Object FullName, LastWriteTime, Length; Get-Content $Path -Tail 50
+
+# IME reinitializes, retrieves fresh app assignments, re-runs all detection circuitry without delay, and reports compliance faster than the standard Intune polling cycle.
+
+$AppID = "62e36920-5c12-47db-9797-81019a68ff7c"; $LogDirectory = "$env:ProgramData\Microsoft\IntuneManagementExtension\Logs"; Write-Output "Running as: $(whoami)"; try { Restart-Service -Name IntuneManagementExtension -Force -ErrorAction Stop; Write-Output "Intune Management Extension restarted and check-in initiated." } catch { Write-Error "Failed to restart IME: $($_.Exception.Message)"; exit 1 }; Start-Sleep -Seconds 10; Write-Output "`nRecent entries containing App ID $AppID:"; Get-ChildItem -Path $LogDirectory -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -match "^(AppWorkload|AppActionProcessor|IntuneManagementExtension).*\.log$" } | Select-String -Pattern $AppID -SimpleMatch | Select-Object -Last 50 Path, LineNumber, Line | Format-List
+
+Function Reset-Intune { Write-Host ">>> RESETTING INTUNE AGENT <<<"; Stop-Service "IntuneManagementExtension" -Force -ErrorAction SilentlyContinue; "AgentExecutor", "Microsoft.Management.Services.IntuneWindowsAgent" | ForEach-Object { Get-Process $_ -ErrorAction SilentlyContinue | Stop-Process -Force }; Remove-Item "C:\ProgramData\Microsoft\IntuneManagementExtension" -Recurse -Force -ErrorAction SilentlyContinue; dsregcmd /refreshprt; Start-Service "IntuneManagementExtension"; Get-ScheduledTask | Where-Object { $_.TaskName -eq 'PushLaunch' } | Start-ScheduledTask; Write-Host ">>> DONE. Sync Triggered. <<<" }; Reset-Intune
 
  # ###################################################################################################################
 ```
@@ -318,8 +339,6 @@ certlm.msc # Certificates
 # ###################################################################################################################
 ```
 
-### Intune troubleshooting
-
 ````powershell
 
 # ###################################################################################################################
@@ -332,7 +351,9 @@ gci 'HKLM:\SOFTWARE\Microsoft\PolicyManager\current\device' -Rec | % { $p=$_.Nam
 
 Get-Service | Where-Object { $_.Name -match "csc_umbrellaagent|stAgentSvc|CSFalconService|IntuneManagementExtension" } | Format-Table Name, Status
 
-# ############### Remove Cisco ###############
+Get-Service | Where-Object { $_.Name -match "stAgentSvc" } | Format-Table Name, Status
+
+# ############### Remove Cisco #####################################################################
 
 "csc_ui.exe", "csc_ui_toast.exe", "vpnui.exe", "vpnagent.exe", "ciscod.exe" | ForEach-Object { taskkill /F /IM $_ /T 2>$null }; @("C:\Program Files (x86)\Cisco\Cisco Secure Client", "C:\ProgramData\Cisco\Cisco Secure Client") | Where-Object { Test-Path $_ } | ForEach-Object { takeown /F $_ /R /D Y | Out-Null; icacls $_ /grant Administrators:F /T /C /Q | Out-Null; Remove-Item -Path $_ -Recurse -Force }
 
@@ -340,20 +361,10 @@ Get-Service | Where-Object { $_.Name -match "csc_umbrellaagent|stAgentSvc|CSFalc
 
 Stop-Service -Name "csc_umbrellaagent" -Force -EA SilentlyContinue; sc.exe delete "csc_umbrellaagent" | Out-Null; Remove-Item -Path "HKLM:\SYSTEM\CurrentControlSet\Services\csc_umbrellaagent" -Recurse -Force -EA SilentlyContinue
 
-# ############### Remove Configmgr/SCCM ###############
+# ############### Remove Configmgr/SCCM #####################################################################
 
 if (Test-Path "C:\Windows\ccmsetup\ccmsetup.exe") { Start-Process -FilePath "C:\Windows\ccmsetup\ccmsetup.exe" -ArgumentList "/uninstall" -Wait -NoNewWindow }
 
-# ############### Force Run (Installer Only) ###############
-
-$AppID = '62e36920-5c12-47db-9797-81019a68ff7c'
-$e="C:\Program Files (x86)\Microsoft Intune Management Extension\AgentExecutor.exe"; if(Test-Path $e){ & $e -configFile "C:\Program Files (x86)\Microsoft Intune Management Extension\AgentExecutorConfig.xml" -appId $AppID -operation 1 } else { echo "AgentExecutor not found" }
-
-# ###################################################################################################################
-
-# IME reinitializes, retrieves fresh app assignments, re-runs all detection circuitry without delay, and reports compliance faster than the standard Intune polling cycle.
-
-Function Reset-Intune { Write-Host ">>> RESETTING INTUNE AGENT <<<"; Stop-Service "IntuneManagementExtension" -Force -ErrorAction SilentlyContinue; "AgentExecutor", "Microsoft.Management.Services.IntuneWindowsAgent" | ForEach-Object { Get-Process $_ -ErrorAction SilentlyContinue | Stop-Process -Force }; Remove-Item "C:\ProgramData\Microsoft\IntuneManagementExtension" -Recurse -Force -ErrorAction SilentlyContinue; dsregcmd /refreshprt; Start-Service "IntuneManagementExtension"; Get-ScheduledTask | Where-Object { $_.TaskName -eq 'PushLaunch' } | Start-ScheduledTask; Write-Host ">>> DONE. Sync Triggered. <<<" }; Reset-Intune
 
 # ###################################################################################################################
 
@@ -368,13 +379,10 @@ Function Reset-Intune { Write-Host ">>> RESETTING INTUNE AGENT <<<"; Stop-Servic
 
 %LOCALAPPDATA%\Microsoft\Edge\User Data\Default
 
-# ############### Signatures ###############
-
-%appdata%\Microsoft\Signatures
-
 ```bash
 
 ################ Local Outlook signatures→ OneDrive backup ###############
+%appdata%\Microsoft\Signatures
 
 $src="$env:APPDATA\Microsoft\Signatures";$dst="$env:USERPROFILE\OneDrive - BeiGene\Desktop\Signatures";if(!(Test-Path $dst)){New-Item $dst -ItemType Directory|Out-Null};Copy-Item "$src\*" $dst -Recurse -Force
 
@@ -383,7 +391,6 @@ $src="$env:APPDATA\Microsoft\Signatures";$dst="$env:USERPROFILE\OneDrive - BeiGe
 $src="$env:USERPROFILE\OneDrive - BeiGene\Desktop\Signatures";$dst="$env:APPDATA\Microsoft\Signatures";if(!(Test-Path $dst)){New-Item $dst -ItemType Directory|Out-Null};Move-Item "$src\*" $dst -Recurse -Force
 
 ```
-
 # ############################## Kyocera Logs ##############################
 
 %APPDATA%\Kyocera Cloud Print and Scan - Print status\logs\errors
