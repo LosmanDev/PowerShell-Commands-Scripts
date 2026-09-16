@@ -231,8 +231,6 @@ Test-NetConnection -ComputerName enterpriseregistration.windows.net -Port 443
 
 ```
 ```powershell
- # Filter specifically for Warning and Error events:
- Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-AAD/Operational','Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin'; Level=2,3} -MaxEvents 10 | Select-Object TimeCreated, Id, LogName, Message | Format-List
 
 # Force Windows device to immediately check in with Microsoft Intune and sync win32 apps and compliance
 $Shell = New-Object -ComObject Shell.Application; $Shell.Open("intunemanagementextension://syncapp"); $Shell.Open("intunemanagementextension://synccompliance"); [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($Shell)
@@ -245,6 +243,11 @@ Restart-Service -Name "IntuneManagementExtension" -Force
 $Tasks = Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\*" | Where-Object { $_.TaskName -match '^Schedule #3(\s|$)' }; $Tasks | Select-Object TaskPath, TaskName, State, @{Name="RunAs";Expression={$_.Principal.UserId}}; $Tasks | Start-ScheduledTask
 
 # Device Management Logs
+
+$s=Get-Date; Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\*" | Where-Object {$_.TaskName -match '^Schedule #3(\s|$)'} | Start-ScheduledTask; Start-Sleep 10; Get-WinEvent -FilterHashtable @{LogName="Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin";StartTime=$s} | Select-Object TimeCreated,Id,LevelDisplayName,@{N='Msg';E={$_.Message -replace '[\r\n]+',' '}} | Format-Table -AutoSize
+
+Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-AAD/Operational','Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin'; Level=2,3} -MaxEvents 10 | Select-Object TimeCreated, Id, LogName, Message | Format-List
+
 Get-WinEvent -LogName "Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin" -MaxEvents 5 | Select-Object TimeCreated, Id, LevelDisplayName, Message | Format-List
 
 $Start=Get-Date; $Tasks=Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\*" | Where-Object {$_.TaskName -match '^Schedule #3(\s|$)'}; $Tasks | Start-ScheduledTask; Start-Sleep 10; Get-WinEvent -FilterHashtable @{LogName="Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin";StartTime=$Start} | Select-Object TimeCreated,Id,LevelDisplayName,Message | Format-List
@@ -468,7 +471,7 @@ Add-Type -A System.Windows.Forms,System.Drawing; function n($m){$b=New-Object Sy
 ################ Surface Laptop 7 ############### 
 # https://www.microsoft.com/en-us/download/details.aspx?id=108014
 
-Add-Type -A System.Windows.Forms,System.Drawing; function n($m){$b=New-Object System.Windows.Forms.NotifyIcon;$b.Icon=[System.Drawing.SystemIcons]::Information;$b.Visible=$true;$b.ShowBalloonTip(5000,'Software Install',$m,[System.Windows.Forms.ToolTipIcon]::Info);sleep -m 600;$b.Dispose()}; $u='https://download.microsoft.com/download/1543bd80-9cae-498d-8b0f-9841e4d7b2a8/SurfaceLaptop7withIntel_Win11_22631_26.044.42206.0.msi'; $p="$env:TEMP\surface7_update.msi"; n 'Downloading Surface Laptop 7 Drivers...'; (New-Object System.Net.WebClient).DownloadFile($u, $p); n 'Installing Surface Laptop 7 Drivers...'; start msiexec -Arg "/i `"$p`" /qn /norestart" -Wait; ri $p -Force; n 'Surface Laptop 7 Drivers Installed Successfully'; sleep 2
+Add-Type -A System.Windows.Forms,System.Drawing; function n($m){$b=New-Object System.Windows.Forms.NotifyIcon;$b.Icon=[System.Drawing.SystemIcons]::Information;$b.Visible=$true;$b.ShowBalloonTip(5000,'Software Install',$m,[System.Windows.Forms.ToolTipIcon]::Info);sleep -m 600;$b.Dispose()}; $u='https://download.microsoft.com/download/1543bd80-9cae-498d-8b0f-9841e4d7b2a8/SurfaceLaptop7withIntel_Win11_22631_26.072.20743.0.msi'; $p="$env:TEMP\surface7_update.msi"; n 'Downloading Surface Laptop 7 Drivers...'; (New-Object System.Net.WebClient).DownloadFile($u, $p); n 'Installing Surface Laptop 7 Drivers...'; start msiexec -Arg "/i `"$p`" /qn /norestart" -Wait; ri $p -Force; n 'Surface Laptop 7 Drivers Installed Successfully'; sleep 2
 
 ################ Chrome ###############
 
