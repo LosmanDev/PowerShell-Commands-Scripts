@@ -233,43 +233,22 @@ Test-NetConnection -ComputerName enterpriseregistration.windows.net -Port 443
 ```powershell
 
 # Force Windows device to immediately check in with Microsoft Intune and sync win32 apps and compliance
-$Shell = New-Object -ComObject Shell.Application; $Shell.Open("intunemanagementextension://syncapp"); $Shell.Open("intunemanagementextension://synccompliance"); [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($Shell)
 
 Start-Process "intunemanagementextension://syncapp"; Start-Sleep -Seconds 2; Start-Process "intunemanagementextension://synccompliance"
 
 Restart-Service -Name "IntuneManagementExtension" -Force 
 
 # Trigger Native OMA-DM (CSPs, Policies, Certificates)
-$Tasks = Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\*" | Where-Object { $_.TaskName -match '^Schedule #3(\s|$)' }; $Tasks | Select-Object TaskPath, TaskName, State, @{Name="RunAs";Expression={$_.Principal.UserId}}; $Tasks | Start-ScheduledTask
+$StartTime = Get-Date; Write-Host ">>> Triggering Native OMA-DM Sync (Schedule #3) <<<" -ForegroundColor Cyan; $Tasks = Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\*" | Where-Object { $_.TaskName -match '^Schedule #3(\s\vert{}$)' }; if (-not $Tasks) { Write-Host "[!] Schedule #3 task not found." -ForegroundColor Red } else { $Tasks | Select-Object TaskPath, TaskName, State, @{Name="RunAs";Expression={$_.Principal.UserId}} \vert{} Format-Table -AutoSize \vert{} Out-String \vert{} Write-Host -ForegroundColor DarkGray; $Tasks | Start-ScheduledTask; Write-Host "[*] Task executed. Suspending 10 seconds for log generation..." -ForegroundColor Yellow; Start-Sleep -Seconds 10; Write-Host "`n>>> OMA-DM Admin Events (Post-Trigger) <<<" -ForegroundColor Cyan; Get-WinEvent -FilterHashtable @{LogName="Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin"; StartTime=$StartTime} -ErrorAction SilentlyContinue | Select-Object TimeCreated, Id, LevelDisplayName, @{N='Message';E={$_.Message -replace '[\r\n]+',' '}} | Format-Table -AutoSize | Out-String | Write-Host -ForegroundColor White; Write-Host "`n>>> Critical AAD & MDM Failures (Last 10 Warnings/Errors) <<<" -ForegroundColor Red; Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-AAD/Operational','Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin'; Level=2,3} -MaxEvents 10 -ErrorAction SilentlyContinue | Select-Object TimeCreated, Id, LogName, @{N='Message';E={$_.Message -replace '[\r\n]+',' '}} | Format-List | Out-String | Write-Host -ForegroundColor DarkYellow }
 
-# Device Management Logs
-
-$s=Get-Date; Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\*" | Where-Object {$_.TaskName -match '^Schedule #3(\s|$)'} | Start-ScheduledTask; Start-Sleep 10; Get-WinEvent -FilterHashtable @{LogName="Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin";StartTime=$s} | Select-Object TimeCreated,Id,LevelDisplayName,@{N='Msg';E={$_.Message -replace '[\r\n]+',' '}} | Format-Table -AutoSize
-
-Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-AAD/Operational','Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin'; Level=2,3} -MaxEvents 10 | Select-Object TimeCreated, Id, LogName, Message | Format-List
-
-Get-WinEvent -LogName "Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin" -MaxEvents 5 | Select-Object TimeCreated, Id, LevelDisplayName, Message | Format-List
-
-$Start=Get-Date; $Tasks=Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\*" | Where-Object {$_.TaskName -match '^Schedule #3(\s|$)'}; $Tasks | Start-ScheduledTask; Start-Sleep 10; Get-WinEvent -FilterHashtable @{LogName="Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin";StartTime=$Start} | Select-Object TimeCreated,Id,LevelDisplayName,Message | Format-List
-
-<#
-Assign one of the following to $Log
-IntuneManagementExtension.log - IME check-ins, policy requests, processing, and reporting
-AppWorkload.log               - Win32 application deployment activity
-AppActionProcessor.log        - Detection and applicability checks
-HealthScripts.log             - Remediation processing
-#>
-$Log = "IntuneManagementExtension.log"; $Path = "$env:ProgramData\Microsoft\IntuneManagementExtension\Logs\$Log"; Get-Item $Path | Select-Object FullName, LastWriteTime, Length; Get-Content $Path -Tail 50
-
-# IME reinitializes, retrieves fresh app assignments, re-runs all detection circuitry without delay, and reports compliance faster than the standard Intune polling cycle.
+# To force Intune to execute the script again, you must delete the local policy tracking keys. 
+Remove-Item -Path "HKLM:\SOFTWARE\Microsoft\IntuneManagementExtension\Policies" -Recurse -Force; Restart-Service -Name "IntuneManagementExtension" -Force 
 
 # ns- 703dbe22-7619-48e9-94bb-29b3c719c74a
 # cu - 4aade9c2-d76b-4a2e-9caf-58201c341f4d
 # cf - f5c225e3-9064-4caf-9c52-0f3a8f375770
 
-$AppID = "62e36920-5c12-47db-9797-81019a68ff7c"; $LogDirectory = "$env:ProgramData\Microsoft\IntuneManagementExtension\Logs"; Write-Output "Running as: $(whoami)"; try { Restart-Service -Name IntuneManagementExtension -Force -ErrorAction Stop; Write-Output "Intune Management Extension restarted and check-in initiated." } catch { Write-Error "Failed to restart IME: $($_.Exception.Message)"; exit 1 }; Start-Sleep -Seconds 10; Write-Output "`nRecent entries containing App ID $AppID:"; Get-ChildItem -Path $LogDirectory -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -match "^(AppWorkload|AppActionProcessor|IntuneManagementExtension).*\.log$" } | Select-String -Pattern $AppID -SimpleMatch | Select-Object -Last 50 Path, LineNumber, Line | Format-List
-
-Function Reset-Intune { Write-Host ">>> RESETTING INTUNE AGENT <<<"; Stop-Service "IntuneManagementExtension" -Force -ErrorAction SilentlyContinue; "AgentExecutor", "Microsoft.Management.Services.IntuneWindowsAgent" | ForEach-Object { Get-Process $_ -ErrorAction SilentlyContinue | Stop-Process -Force }; Remove-Item "C:\ProgramData\Microsoft\IntuneManagementExtension" -Recurse -Force -ErrorAction SilentlyContinue; dsregcmd /refreshprt; Start-Service "IntuneManagementExtension"; Get-ScheduledTask | Where-Object { $_.TaskName -eq 'PushLaunch' } | Start-ScheduledTask; Write-Host ">>> DONE. Sync Triggered. <<<" }; Reset-Intune
+Function Reset-Intune { Write-Host ">>> RESETTING INTUNE AGENT <<<"; Stop-Service "IntuneManagementExtension" -Force -ErrorAction SilentlyContinue; "AgentExecutor", "Microsoft.Management.Services.IntuneWindowsAgent" | ForEach-Object { Get-Process $_ -ErrorAction SilentlyContinue | Stop-Process -Force }; Remove-Item "C:\ProgramData\Microsoft\IntuneManagementExtension" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -Path "HKLM:\SOFTWARE\Microsoft\IntuneManagementExtension\Policies" -Recurse -Force -ErrorAction SilentlyContinue; dsregcmd /refreshprt; Start-Service "IntuneManagementExtension"; Get-ScheduledTask | Where-Object { $_.TaskName -eq 'PushLaunch' } | Start-ScheduledTask; Write-Host ">>> DONE. Sync Triggered. <<<" }; Reset-Intune
 
  # ###################################################################################################################
 ```
