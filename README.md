@@ -263,6 +263,10 @@ $Log = "IntuneManagementExtension.log"; $Path = "$env:ProgramData\Microsoft\Intu
 
 # IME reinitializes, retrieves fresh app assignments, re-runs all detection circuitry without delay, and reports compliance faster than the standard Intune polling cycle.
 
+# ns- 703dbe22-7619-48e9-94bb-29b3c719c74a
+# cu - 4aade9c2-d76b-4a2e-9caf-58201c341f4d
+# cf - f5c225e3-9064-4caf-9c52-0f3a8f375770
+
 $AppID = "62e36920-5c12-47db-9797-81019a68ff7c"; $LogDirectory = "$env:ProgramData\Microsoft\IntuneManagementExtension\Logs"; Write-Output "Running as: $(whoami)"; try { Restart-Service -Name IntuneManagementExtension -Force -ErrorAction Stop; Write-Output "Intune Management Extension restarted and check-in initiated." } catch { Write-Error "Failed to restart IME: $($_.Exception.Message)"; exit 1 }; Start-Sleep -Seconds 10; Write-Output "`nRecent entries containing App ID $AppID:"; Get-ChildItem -Path $LogDirectory -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -match "^(AppWorkload|AppActionProcessor|IntuneManagementExtension).*\.log$" } | Select-String -Pattern $AppID -SimpleMatch | Select-Object -Last 50 Path, LineNumber, Line | Format-List
 
 Function Reset-Intune { Write-Host ">>> RESETTING INTUNE AGENT <<<"; Stop-Service "IntuneManagementExtension" -Force -ErrorAction SilentlyContinue; "AgentExecutor", "Microsoft.Management.Services.IntuneWindowsAgent" | ForEach-Object { Get-Process $_ -ErrorAction SilentlyContinue | Stop-Process -Force }; Remove-Item "C:\ProgramData\Microsoft\IntuneManagementExtension" -Recurse -Force -ErrorAction SilentlyContinue; dsregcmd /refreshprt; Start-Service "IntuneManagementExtension"; Get-ScheduledTask | Where-Object { $_.TaskName -eq 'PushLaunch' } | Start-ScheduledTask; Write-Host ">>> DONE. Sync Triggered. <<<" }; Reset-Intune
