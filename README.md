@@ -236,7 +236,6 @@ Test-NetConnection -ComputerName enterpriseregistration.windows.net -Port 443
 
 Start-Process "intunemanagementextension://syncapp"; Start-Sleep -Seconds 2; Start-Process "intunemanagementextension://synccompliance"
 
-Restart-Service -Name "IntuneManagementExtension" -Force 
 
 # Trigger Native OMA-DM (CSPs, Policies, Certificates)
 $StartTime = Get-Date; Write-Host ">>> Triggering Native OMA-DM Sync (Schedule #3) <<<" -ForegroundColor Cyan; $Tasks = Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\*" | Where-Object { $_.TaskName -match '^Schedule #3(\s\vert{}$)' }; if (-not $Tasks) { Write-Host "[!] Schedule #3 task not found." -ForegroundColor Red } else { $Tasks | Select-Object TaskPath, TaskName, State, @{Name="RunAs";Expression={$_.Principal.UserId}} \vert{} Format-Table -AutoSize \vert{} Out-String \vert{} Write-Host -ForegroundColor DarkGray; $Tasks | Start-ScheduledTask; Write-Host "[*] Task executed. Suspending 10 seconds for log generation..." -ForegroundColor Yellow; Start-Sleep -Seconds 10; Write-Host "`n>>> OMA-DM Admin Events (Post-Trigger) <<<" -ForegroundColor Cyan; Get-WinEvent -FilterHashtable @{LogName="Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin"; StartTime=$StartTime} -ErrorAction SilentlyContinue | Select-Object TimeCreated, Id, LevelDisplayName, @{N='Message';E={$_.Message -replace '[\r\n]+',' '}} | Format-Table -AutoSize | Out-String | Write-Host -ForegroundColor White; Write-Host "`n>>> Critical AAD & MDM Failures (Last 10 Warnings/Errors) <<<" -ForegroundColor Red; Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-AAD/Operational','Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin'; Level=2,3} -MaxEvents 10 -ErrorAction SilentlyContinue | Select-Object TimeCreated, Id, LogName, @{N='Message';E={$_.Message -replace '[\r\n]+',' '}} | Format-List | Out-String | Write-Host -ForegroundColor DarkYellow }
@@ -244,11 +243,11 @@ $StartTime = Get-Date; Write-Host ">>> Triggering Native OMA-DM Sync (Schedule #
 # To force Intune to execute the script again, you must delete the local policy tracking keys. 
 Remove-Item -Path "HKLM:\SOFTWARE\Microsoft\IntuneManagementExtension\Policies" -Recurse -Force; Restart-Service -Name "IntuneManagementExtension" -Force 
 
-# ns- 703dbe22-7619-48e9-94bb-29b3c719c74a
-# cu - 4aade9c2-d76b-4a2e-9caf-58201c341f4d
-# cf - f5c225e3-9064-4caf-9c52-0f3a8f375770
-
 Function Reset-Intune { Write-Host ">>> RESETTING INTUNE AGENT <<<"; Stop-Service "IntuneManagementExtension" -Force -ErrorAction SilentlyContinue; "AgentExecutor", "Microsoft.Management.Services.IntuneWindowsAgent" | ForEach-Object { Get-Process $_ -ErrorAction SilentlyContinue | Stop-Process -Force }; Remove-Item "C:\ProgramData\Microsoft\IntuneManagementExtension" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -Path "HKLM:\SOFTWARE\Microsoft\IntuneManagementExtension\Policies" -Recurse -Force -ErrorAction SilentlyContinue; dsregcmd /refreshprt; Start-Service "IntuneManagementExtension"; Get-ScheduledTask | Where-Object { $_.TaskName -eq 'PushLaunch' } | Start-ScheduledTask; Write-Host ">>> DONE. Sync Triggered. <<<" }; Reset-Intune
+
+
+# Remove app GUID that failed to install from Intune.
+$g="b8219c8d-14ec-4ad8-8de1-0ce1550e7a21"; Get-ChildItem "HKLM:\SOFTWARE\Microsoft\IntuneManagementExtension\Win32Apps" | ForEach-Object { Remove-Item -Path "$($_.PSPath)\$g", "$($_.PSPath)\GRS\$g" -Recurse -Force -ErrorAction SilentlyContinue }; Restart-Service "IntuneManagementExtension" -Force
 
  # ###################################################################################################################
 ```
@@ -383,13 +382,14 @@ $src="$env:USERPROFILE\OneDrive - BeiGene\Desktop\Signatures";$dst="$env:APPDATA
 
 # ############################## Outlook Monthly Channel ##############################
 
+"POWERPNT","EXCEL","WINWORD","OUTLOOK" | ForEach-Object { Get-Process -Name $_ -ErrorAction SilentlyContinue | ForEach-Object { try { Stop-Process -Id $_.Id -Force -ErrorAction Stop; Write-Host "Terminated: $($_.Name) (PID $($_.Id))" } catch { Write-Host "Failed to terminate: $($_.Name) (PID $($_.Id))" } } }
+
 Set-Location "C:\Program Files\Common Files\Microsoft Shared\ClickToRun"
 .\OfficeC2RClient.exe /changesetting Channel=MonthlyEnterprise
 .\OfficeC2RClient.exe /update user
 
 $Monthly = "C:\Program Files\Common Files\Microsoft Shared\ClickToRun\OfficeC2RClient.exe"; & $Monthly /changesetting Channel=MonthlyEnterprise; & $Monthly /update user
 
-"POWERPNT","EXCEL","WINWORD","OUTLOOK" | ForEach-Object { Get-Process -Name $_ -ErrorAction SilentlyContinue | ForEach-Object { try { Stop-Process -Id $_.Id -Force -ErrorAction Stop; Write-Host "Terminated: $($_.Name) (PID $($_.Id))" } catch { Write-Host "Failed to terminate: $($_.Name) (PID $($_.Id))" } } }
 
 # ############################## Outlook Legacy Room Finder ##############################
 
@@ -426,6 +426,10 @@ If you see this issue when open company resources by Chrome, even you have insta
 [HKEY_LOCAL_MACHINE\Software\Policies\Google\Chrome]"CloudAPAuthEnabled"=dword:00000001 
 
 if (!(Test-Path "HKLM:\Software\Policies\Google\Chrome")) { New-Item -Path "HKLM:\Software\Policies\Google\Chrome" -Force | Out-Null }; Set-ItemProperty -Path "HKLM:\Software\Policies\Google\Chrome" -Name "CloudAPAuthEnabled" -Value 1 -Type DWord
+
+# ############################## Walk Me removal ##############################
+
+$paths='HKLM:\SOFTWARE\Policies\Microsoft\Edge\ExtensionInstallForcelist','HKCU:\SOFTWARE\Policies\Microsoft\Edge\ExtensionInstallForcelist'; $id='hljogmncibpgfgkbbjgjjbfkjdbfkjmn'; $paths|%{if(Test-Path $_){(Get-ItemProperty $_).PSObject.Properties|?{$_.Value -like "*$id*"}|%{Remove-ItemProperty $_.PSPath -Name $_.Name -Force}}}; Stop-Process -Name msedge -Force -ErrorAction SilentlyContinue
 
 ````
 
@@ -515,6 +519,7 @@ log show --predicate 'subsystem == "com.apple.MDM"' --last 1h
 
 # Streams real-time execution logs for the Jamf binary.
 log stream --predicate 'process == "jamf"' 
+log show --predicate 'subsystem CONTAINS "jamfAAD"' --last 1h
 
 # Forces execution of pending policies scoped to the device.
 sudo jamf policy 
@@ -527,6 +532,15 @@ sudo jamf manage
 
 # Prompts for user-level MDM profile installation if missing.
 sudo jamf mdm -userLevelMdm 
+
+# Validates that the macOS endpoint holds an active, verified MDM profile.
+profiles status -type enrollment
+
+# Forces JamfAAD to authenticate with Entra ID, fetch the Azure Device ID, and report the state to Jamf Pro.
+/usr/local/jamf/bin/jamfaad gatherAADInfo
+
+# Removes corrupted Entra ID tokens from the user keychain and clears preferences. Triggers a new JamfAAD authentication prompt to rebuild the compliance state.
+/usr/local/jamf/bin/jamfAAD clean
 
 ############################### System & Hardware Auditing ############################## 
 
