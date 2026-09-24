@@ -238,16 +238,22 @@ Start-Process "intunemanagementextension://syncapp"; Start-Sleep -Seconds 2; Sta
 
 
 # Trigger Native OMA-DM (CSPs, Policies, Certificates)
+
 $StartTime = Get-Date; Write-Host ">>> Triggering Native OMA-DM Sync (Schedule #3) <<<" -ForegroundColor Cyan; $Tasks = Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\*" | Where-Object { $_.TaskName -match '^Schedule #3(\s\vert{}$)' }; if (-not $Tasks) { Write-Host "[!] Schedule #3 task not found." -ForegroundColor Red } else { $Tasks | Select-Object TaskPath, TaskName, State, @{Name="RunAs";Expression={$_.Principal.UserId}} \vert{} Format-Table -AutoSize \vert{} Out-String \vert{} Write-Host -ForegroundColor DarkGray; $Tasks | Start-ScheduledTask; Write-Host "[*] Task executed. Suspending 10 seconds for log generation..." -ForegroundColor Yellow; Start-Sleep -Seconds 10; Write-Host "`n>>> OMA-DM Admin Events (Post-Trigger) <<<" -ForegroundColor Cyan; Get-WinEvent -FilterHashtable @{LogName="Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin"; StartTime=$StartTime} -ErrorAction SilentlyContinue | Select-Object TimeCreated, Id, LevelDisplayName, @{N='Message';E={$_.Message -replace '[\r\n]+',' '}} | Format-Table -AutoSize | Out-String | Write-Host -ForegroundColor White; Write-Host "`n>>> Critical AAD & MDM Failures (Last 10 Warnings/Errors) <<<" -ForegroundColor Red; Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-AAD/Operational','Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin'; Level=2,3} -MaxEvents 10 -ErrorAction SilentlyContinue | Select-Object TimeCreated, Id, LogName, @{N='Message';E={$_.Message -replace '[\r\n]+',' '}} | Format-List | Out-String | Write-Host -ForegroundColor DarkYellow }
 
 # To force Intune to execute the script again, you must delete the local policy tracking keys. 
+
 Remove-Item -Path "HKLM:\SOFTWARE\Microsoft\IntuneManagementExtension\Policies" -Recurse -Force; Restart-Service -Name "IntuneManagementExtension" -Force 
 
 Function Reset-Intune { Write-Host ">>> RESETTING INTUNE AGENT <<<"; Stop-Service "IntuneManagementExtension" -Force -ErrorAction SilentlyContinue; "AgentExecutor", "Microsoft.Management.Services.IntuneWindowsAgent" | ForEach-Object { Get-Process $_ -ErrorAction SilentlyContinue | Stop-Process -Force }; Remove-Item "C:\ProgramData\Microsoft\IntuneManagementExtension" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -Path "HKLM:\SOFTWARE\Microsoft\IntuneManagementExtension\Policies" -Recurse -Force -ErrorAction SilentlyContinue; dsregcmd /refreshprt; Start-Service "IntuneManagementExtension"; Get-ScheduledTask | Where-Object { $_.TaskName -eq 'PushLaunch' } | Start-ScheduledTask; Write-Host ">>> DONE. Sync Triggered. <<<" }; Reset-Intune
 
+# Search for GUID
+
+$g="b8219c8d-14ec-4ad8-8de1-0ce1550e7a21"; reg query "HKLM\SOFTWARE\Microsoft\IntuneManagementExtension\Win32Apps" /s /f $g /k
 
 # Remove app GUID that failed to install from Intune.
-$g="b8219c8d-14ec-4ad8-8de1-0ce1550e7a21"; Get-ChildItem "HKLM:\SOFTWARE\Microsoft\IntuneManagementExtension\Win32Apps" | ForEach-Object { Remove-Item -Path "$($_.PSPath)\$g", "$($_.PSPath)\GRS\$g" -Recurse -Force -ErrorAction SilentlyContinue }; Restart-Service "IntuneManagementExtension" -Force
+
+$g="b8219c8d-14ec-4ad8-8de1-0ce1550e7a21"; reg query "HKLM\SOFTWARE\Microsoft\IntuneManagementExtension\Win32Apps" /s /f $g /k | Select-String "HKEY_LOCAL_MACHINE" | ForEach-Object { Remove-Item -Path $_.Line.Trim().Replace("HKEY_LOCAL_MACHINE", "HKLM:") -Recurse -Force }; Restart-Service "IntuneManagementExtension" -Force
 
  # ###################################################################################################################
 ```
@@ -459,6 +465,9 @@ Add-Type -A System.Windows.Forms,System.Drawing; function n($m){$b=New-Object Sy
 # https://www.microsoft.com/en-us/download/details.aspx?id=108014
 
 Add-Type -A System.Windows.Forms,System.Drawing; function n($m){$b=New-Object System.Windows.Forms.NotifyIcon;$b.Icon=[System.Drawing.SystemIcons]::Information;$b.Visible=$true;$b.ShowBalloonTip(5000,'Software Install',$m,[System.Windows.Forms.ToolTipIcon]::Info);sleep -m 600;$b.Dispose()}; $u='https://download.microsoft.com/download/1543bd80-9cae-498d-8b0f-9841e4d7b2a8/SurfaceLaptop7withIntel_Win11_22631_26.072.20743.0.msi'; $p="$env:TEMP\surface7_update.msi"; n 'Downloading Surface Laptop 7 Drivers...'; (New-Object System.Net.WebClient).DownloadFile($u, $p); n 'Installing Surface Laptop 7 Drivers...'; start msiexec -Arg "/i `"$p`" /qn /norestart" -Wait; ri $p -Force; n 'Surface Laptop 7 Drivers Installed Successfully'; sleep 2
+
+
+Add-Type -A System.Windows.Forms,System.Drawing; function n($m){$b=New-Object System.Windows.Forms.NotifyIcon;$b.Icon=[System.Drawing.SystemIcons]::Information;$b.Visible=$true;$b.ShowBalloonTip(5000,'Software Install',$m,[System.Windows.Forms.ToolTipIcon]::Info);sleep -m 600;$b.Dispose()}; if ((Invoke-WebRequest -Uri "https://www.microsoft.com/en-us/download/details.aspx?id=108014" -UseBasicParsing).Content -match 'href="(https://download\.microsoft\.com/download/[^"]+/SurfaceLaptop7withIntel[^"]+\.msi)"') { $u=$matches[1] } else { throw "Link extraction failed" }; $p="$env:TEMP\surface7_update.msi"; n 'Downloading Surface Laptop 7 Drivers...'; (New-Object System.Net.WebClient).DownloadFile($u,$p); n 'Installing Surface Laptop 7 Drivers...'; start msiexec -Arg "/i `"$p`" /qn /norestart" -Wait; ri $p -Force; n 'Surface Laptop 7 Drivers Installed Successfully'; sleep 2
 
 ################ Chrome ###############
 
