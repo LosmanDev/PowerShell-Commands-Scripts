@@ -26,10 +26,11 @@ wmic bios get serialnumber
 wmic bios get smbiosbiosversion
 
 ################ Remove Users from Loaner ###############
-$ExcludedProfiles = @("liban.osman", "Public", "Default"); Get-CimInstance -ClassName Win32_UserProfile | Where-Object { $_.Special -eq $false -and $_.Loaded -eq $false -and $_.LocalPath -notmatch ($ExcludedProfiles -join "|") } | Remove-CimInstance -Confirm:$false
+$ExcludedProfiles = @("admin.", "liban.osman", "Public", "Default"); Get-CimInstance -ClassName Win32_UserProfile | Where-Object { $_.Special -eq $false -and $_.Loaded -eq $false -and $_.LocalPath -notmatch ($ExcludedProfiles -join "|") } | Remove-CimInstance -Confirm:$false
 
-# Screen Lock
-$wsh = New-Object -ComObject Wscript.Shell; WHILE($TRUE){$wsh.SendKeys("{SCROLLLOCK}");$wsh.SendKeys("{SCROLLLOCK}");START-SLEEP -Seconds (Get-Random -Minimum 45.1 -Maximum 110.99)}
+# Local admin Exception Group
+Add-LocalGroupMember -Group "Administrators" -Member "AzureAD\"
+Get-LocalGroupMember -Group "Administrators"
 
 # ###################################################################################################################
 ```
@@ -61,7 +62,7 @@ $wsh = New-Object -ComObject Wscript.Shell; WHILE($TRUE){$wsh.SendKeys("{SCROLLL
 
 Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile', '-Command', 'DISM /Online /Cleanup-Image /RestoreHealth; sfc /scannow; DISM /Online /Cleanup-Image /StartComponentCleanup; Stop-Service -Name ''SysMain'' -Force; Set-Service -Name ''SysMain'' -StartupType Disabled; Optimize-Volume -DriveLetter C -ReTrim -Verbose; Clear-RecycleBin -Force; Remove-Item -Path "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -Path "C:\Windows\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -Path "C:\Windows\Prefetch\*" -Recurse -Force -ErrorAction SilentlyContinue; Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $f=New-Object Windows.Forms.Form; $f.Width=350; $f.Height=150; $f.StartPosition=''CenterScreen''; $f.TopMost=$true; $f.Text=''Please save your work''; $f.ControlBox=$false; $l=New-Object Windows.Forms.Label; $l.AutoSize=$true; $l.Font=New-Object Drawing.Font(''Segoe UI'', 14); $l.Top=40; $l.Left=50; $f.Controls.Add($l); $f.Show(); for($i=120; $i -gt 0; $i--){$l.Text=''Restarting in ''+$i+'' seconds...''; $f.Refresh(); Start-Sleep 1}; Restart-Computer -Force'
 
-Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile', '-Command', '$k=''[DllImport(\"kernel32.dll\")]public static extern uint SetThreadExecutionState(uint f);[DllImport(\"kernel32.dll\")]public static extern IntPtr GetStdHandle(int n);[DllImport(\"kernel32.dll\")]public static extern bool GetConsoleMode(IntPtr h, out uint m);[DllImport(\"kernel32.dll\")]public static extern bool SetConsoleMode(IntPtr h, uint m);''; $t=Add-Type -MemberDefinition $k -Name ''Api'' -PassThru; $null=$t::SetThreadExecutionState(0x80000003); $h=$t::GetStdHandle(-10); [uint32]$m=0; $t::GetConsoleMode($h,[ref]$m); $t::SetConsoleMode($h,($m -band -bnot 0x0040)); DISM /Online /Cleanup-Image /RestoreHealth; sfc /scannow; DISM /Online /Cleanup-Image /StartComponentCleanup; Stop-Service -Name ''SysMain'' -Force -ErrorAction SilentlyContinue; Set-Service -Name ''SysMain'' -StartupType Disabled; Optimize-Volume -DriveLetter C -ReTrim -Verbose; Clear-RecycleBin -Force -ErrorAction SilentlyContinue; Remove-Item -Path \"$env:TEMP\*\" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -Path \"C:\Windows\Temp\*\" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -Path \"C:\Windows\Prefetch\*\" -Recurse -Force -ErrorAction SilentlyContinue; for($i=120; $i -gt 0; $i--){Clear-Host; Write-Host ''Please save your work.'' -ForegroundColor Red; Write-Host (''Restarting in ''+$i+'' seconds...''); Start-Sleep 1}; Restart-Computer -Force'
+Start-Process powershell -Verb RunAs -WindowStyle Hidden -ArgumentList '-NoProfile', '-Command', '$k=''[DllImport(\"kernel32.dll\")]public static extern uint SetThreadExecutionState(uint f);''; $t=Add-Type -MemberDefinition $k -Name ''Pwr'' -PassThru; $null=$t::SetThreadExecutionState(0x80000003); Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; [System.Windows.Forms.Application]::EnableVisualStyles(); $f=New-Object Windows.Forms.Form; $f.Width=400; $f.Height=150; $f.StartPosition=''CenterScreen''; $f.TopMost=$true; $f.Text=''System Maintenance''; $f.ControlBox=$false; $l=New-Object Windows.Forms.Label; $l.AutoSize=$true; $l.Font=New-Object System.Drawing.Font(''Segoe UI'', 11); $l.Top=20; $l.Left=20; $f.Controls.Add($l); $pb=New-Object Windows.Forms.ProgressBar; $pb.Top=60; $pb.Left=20; $pb.Width=340; $pb.Height=25; $pb.Style=''Marquee''; $f.Controls.Add($pb); $f.Show(); $c = {DISM /Online /Cleanup-Image /RestoreHealth},{sfc /scannow},{DISM /Online /Cleanup-Image /StartComponentCleanup},{Stop-Service -Name ''SysMain'' -Force -ErrorAction SilentlyContinue; Set-Service -Name ''SysMain'' -StartupType Disabled; Optimize-Volume -DriveLetter C -ReTrim},{Clear-RecycleBin -Force -ErrorAction SilentlyContinue; Remove-Item -Path \"$env:TEMP\*\" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -Path \"C:\Windows\Temp\*\" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -Path \"C:\Windows\Prefetch\*\" -Recurse -Force -ErrorAction SilentlyContinue}; $m = ''Repairing Image (DISM)'',''System File Checker'',''Component Cleanup'',''Optimizing Storage'',''Clearing Temp Files''; for($x=0; $x -lt 5; $x++){$l.Text = ''Step '' + ($x+1) + ''/5: '' + $m[$x]; $j = Start-Job -ScriptBlock $c[$x]; while($j.State -eq ''Running''){ [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 100 }; Receive-Job -Job $j | Out-Null; Remove-Job -Job $j}; $pb.Style=''Blocks''; $pb.Maximum=120; $f.Text=''Please save your work''; for($i=120; $i -gt 0; $i--){$l.Text=''Restarting in ''+$i+'' seconds...''; $pb.Value=$i; [System.Windows.Forms.Application]::DoEvents(); Start-Sleep 1}; Restart-Computer -Force'
 
 ################ tail recent DISM entries###############
 Get-Content -Path C:\Windows\Logs\DISM\dism.log -Tail 200
@@ -134,6 +135,8 @@ $scanevnt=24; $s=(Get-Date).AddHours(-$scanevnt); 'Application','System' | % { W
 ```bash
 
 cd "$env:USERPROFILE\downloads"
+Add-AppxProvisionedPackage -Online -PackagePath "C:\path\dependency.msix" -SkipLicense
+Add-AppxProvisionedPackage -Online -PackagePath "C:\path\app.msix" -DependencyPackagePath "C:\path\dependency.msix" -SkipLicense
 
 # Downloads size check
 
@@ -244,6 +247,9 @@ Start-Process "intunemanagementextension://syncapp"; Start-Sleep -Seconds 2; Sta
 # Trigger Native OMA-DM (CSPs, Policies, Certificates)
 
 $StartTime = Get-Date; Write-Host ">>> Triggering Native OMA-DM Sync (Schedule #3) <<<" -ForegroundColor Cyan; $Tasks = Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\*" | Where-Object { $_.TaskName -match '^Schedule #3(\s\vert{}$)' }; if (-not $Tasks) { Write-Host "[!] Schedule #3 task not found." -ForegroundColor Red } else { $Tasks | Select-Object TaskPath, TaskName, State, @{Name="RunAs";Expression={$_.Principal.UserId}} \vert{} Format-Table -AutoSize \vert{} Out-String \vert{} Write-Host -ForegroundColor DarkGray; $Tasks | Start-ScheduledTask; Write-Host "[*] Task executed. Suspending 10 seconds for log generation..." -ForegroundColor Yellow; Start-Sleep -Seconds 10; Write-Host "`n>>> OMA-DM Admin Events (Post-Trigger) <<<" -ForegroundColor Cyan; Get-WinEvent -FilterHashtable @{LogName="Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin"; StartTime=$StartTime} -ErrorAction SilentlyContinue | Select-Object TimeCreated, Id, LevelDisplayName, @{N='Message';E={$_.Message -replace '[\r\n]+',' '}} | Format-Table -AutoSize | Out-String | Write-Host -ForegroundColor White; Write-Host "`n>>> Critical AAD & MDM Failures (Last 10 Warnings/Errors) <<<" -ForegroundColor Red; Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-AAD/Operational','Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin'; Level=2,3} -MaxEvents 10 -ErrorAction SilentlyContinue | Select-Object TimeCreated, Id, LogName, @{N='Message';E={$_.Message -replace '[\r\n]+',' '}} | Format-List | Out-String | Write-Host -ForegroundColor DarkYellow }
+
+$Tasks = Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\*" | Where-Object { $_.TaskName -match '^Schedule #3' }
+Start-Process -FilePath "$env:windir\system32\deviceenroller.exe" -ArgumentList "/c /RetrievePolicies" -NoNewWindow
 
 # To force Intune to execute the script again, you must delete the local policy tracking keys. 
 
@@ -363,9 +369,6 @@ if (Test-Path "C:\Windows\ccmsetup\ccmsetup.exe") { Start-Process -FilePath "C:\
 
 # ###################################################################################################################
 
-# Defender compliance script
- https://call4cloud.nl/FixWSCDefender.ps1
-
 # ############### Chrome Bookmarks ###############
 
 %LOCALAPPDATA%\Google\Chrome\User Data\Default
@@ -403,7 +406,7 @@ $Monthly = "C:\Program Files\Common Files\Microsoft Shared\ClickToRun\OfficeC2RC
 
 # ############################## Outlook Legacy Room Finder ##############################
 
-$s=(Get-CimInstance Win32_UserProfile | ? LocalPath -match "mike.kao").SID; $p1="Registry::HKEY_USERS\$s\SOFTWARE\Policies\Microsoft\Office\16.0\Outlook\Options\Calendar"; $p2="Registry::HKEY_USERS\$s\SOFTWARE\Microsoft\Office\16.0\Outlook\Preferences"; if(!(Test-Path $p1)){New-Item $p1 -Force | Out-Null}; New-ItemProperty -Path $p1 -Name "ShowLegacyRoomFinder" -Value 1 -PropertyType DWord -Force | Out-Null; if(!(Test-Path $p2)){New-Item $p2 -Force | Out-Null}; New-ItemProperty -Path $p2 -Name "RoomFinderForceWebView" -Value 0 -PropertyType DWord -Force | Out-Null
+$s=(Get-CimInstance Win32_UserProfile | ? LocalPath -match "first.last").SID; $p1="Registry::HKEY_USERS\$s\SOFTWARE\Policies\Microsoft\Office\16.0\Outlook\Options\Calendar"; $p2="Registry::HKEY_USERS\$s\SOFTWARE\Microsoft\Office\16.0\Outlook\Preferences"; if(!(Test-Path $p1)){New-Item $p1 -Force | Out-Null}; New-ItemProperty -Path $p1 -Name "ShowLegacyRoomFinder" -Value 1 -PropertyType DWord -Force | Out-Null; if(!(Test-Path $p2)){New-Item $p2 -Force | Out-Null}; New-ItemProperty -Path $p2 -Name "RoomFinderForceWebView" -Value 0 -PropertyType DWord -Force | Out-Null
 
 # ############################## Edge Fix ##############################
 
@@ -416,7 +419,7 @@ $ClientKeys = @(
 )
 foreach ($Key in $ClientKeys) { Remove-Item -Path $Key -Recurse -Force -ErrorAction SilentlyContinue }
 
-Start-Process msiexec.exe -ArgumentList '/i "C:\Users\ray.nunez\Downloads\MicrosoftEdgeEnterpriseX64.msi" /qn /norestart /L*V "C:\edge_install.log"' -Wait -NoNewWindow
+Start-Process msiexec.exe -ArgumentList '/i "C:\Users\first.last\Downloads\MicrosoftEdgeEnterpriseX64.msi" /qn /norestart /L*V "C:\edge_install.log"' -Wait -NoNewWindow
 
 https://www.microsoft.com/en-us/edge/business/download?form=MA13FJ
 
@@ -457,18 +460,12 @@ Add-Type -A System.Windows.Forms,System.Drawing; function n($m){$b=New-Object Sy
 ################ Surface Laptop 5 ############### 
 # https://www.microsoft.com/en-us/download/details.aspx?id=104679
 
-Add-Type -A System.Windows.Forms,System.Drawing; function n($m){$b=New-Object System.Windows.Forms.NotifyIcon;$b.Icon=[System.Drawing.SystemIcons]::Information;$b.Visible=$true;$b.ShowBalloonTip(5000,'Software Install',$m,[System.Windows.Forms.ToolTipIcon]::Info);sleep -m 600;$b.Dispose()}; $u='https://download.microsoft.com/download/68992368-8d70-4231-a9e4-23dfaede832b/SurfaceLaptop5_Win11_22631_26.072.18051.0.msi'; $p="$env:TEMP\surface5_update.msi"; n 'Downloading Surface Laptop 5 Drivers...'; (New-Object System.Net.WebClient).DownloadFile($u, $p); n 'Installing Surface Laptop 5 Drivers...'; start msiexec -Arg "/i `"$p`" /qn /norestart" -Wait; ri $p -Force; n 'Surface Laptop 5 Drivers Installed Successfully'; sleep 2
-
-################ Surface Laptop 5 ############### 
 Add-Type -A System.Windows.Forms,System.Drawing; function n($m){$b=New-Object System.Windows.Forms.NotifyIcon;$b.Icon=[System.Drawing.SystemIcons]::Information;$b.Visible=$true;$b.ShowBalloonTip(5000,'Software Install',$m,[System.Windows.Forms.ToolTipIcon]::Info);sleep -m 600;$b.Dispose()}; if ((Invoke-WebRequest -Uri "https://www.microsoft.com/en-us/download/details.aspx?id=104679" -UseBasicParsing).Content -match 'href="(https://download\.microsoft\.com/download/[^"]+/SurfaceLaptop5[^"]+\.msi)"') { $u=$matches[1] } else { throw "Link extraction failed" }; $p="$env:TEMP\surface5_update.msi"; n 'Downloading Surface Laptop 5 Drivers...'; (New-Object System.Net.WebClient).DownloadFile($u,$p); n 'Installing Surface Laptop 5 Drivers...'; start msiexec -Arg "/i `"$p`" /qn /norestart" -Wait; ri $p -Force; n 'Surface Laptop 5 Drivers Installed Successfully'; sleep 2
 
 
 ################ Surface Laptop 6 ############### 
 # https://www.microsoft.com/en-us/download/details.aspx?id=105946
 
-Add-Type -A System.Windows.Forms,System.Drawing; function n($m){$b=New-Object System.Windows.Forms.NotifyIcon;$b.Icon=[System.Drawing.SystemIcons]::Information;$b.Visible=$true;$b.ShowBalloonTip(5000,'Software Install',$m,[System.Windows.Forms.ToolTipIcon]::Info);sleep -m 600;$b.Dispose()}; $u='https://download.microsoft.com/download/a53facb0-c939-4302-a0d3-53aa18217230/SurfaceLaptop6forBusiness_Win11_22631_26.072.19202.0.msi'; $p="$env:TEMP\surface6_update.msi"; n 'Downloading Surface Laptop 6 Drivers...'; (New-Object System.Net.WebClient).DownloadFile($u, $p); n 'Installing Surface Laptop 6 Drivers...'; start msiexec -Arg "/i `"$p`" /qn /norestart" -Wait; ri $p -Force; n 'Surface Laptop 6 Drivers Installed Successfully'; sleep 2
-
-################ Surface Laptop 6 ############### 
 Add-Type -A System.Windows.Forms,System.Drawing; function n($m){$b=New-Object System.Windows.Forms.NotifyIcon;$b.Icon=[System.Drawing.SystemIcons]::Information;$b.Visible=$true;$b.ShowBalloonTip(5000,'Software Install',$m,[System.Windows.Forms.ToolTipIcon]::Info);sleep -m 600;$b.Dispose()}; if ((Invoke-WebRequest -Uri "https://www.microsoft.com/en-us/download/details.aspx?id=105946" -UseBasicParsing).Content -match 'href="(https://download\.microsoft\.com/download/[^"]+/SurfaceLaptop6forBusiness[^"]+\.msi)"') { $u=$matches[1] } else { throw "Link extraction failed" }; $p="$env:TEMP\surface6_update.msi"; n 'Downloading Surface Laptop 6 Drivers...'; (New-Object System.Net.WebClient).DownloadFile($u,$p); n 'Installing Surface Laptop 6 Drivers...'; start msiexec -Arg "/i `"$p`" /qn /norestart" -Wait; ri $p -Force; n 'Surface Laptop 6 Drivers Installed Successfully'; sleep 2
 
 ################ Surface Laptop 7 ############### 
