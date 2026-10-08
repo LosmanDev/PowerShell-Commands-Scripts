@@ -26,7 +26,7 @@ wmic bios get serialnumber
 wmic bios get smbiosbiosversion
 
 ################ Remove Users from Loaner ###############
-$ExcludedProfiles = @("admin.", "liban.osman", "Public", "Default"); Get-CimInstance -ClassName Win32_UserProfile | Where-Object { $_.Special -eq $false -and $_.Loaded -eq $false -and $_.LocalPath -notmatch ($ExcludedProfiles -join "|") } | Remove-CimInstance -Confirm:$false
+$ExcludedProfiles = @("admin.losman", "liban.osman", "Public", "Default"); Get-CimInstance -ClassName Win32_UserProfile | Where-Object { $_.Special -eq $false -and $_.Loaded -eq $false -and $_.LocalPath -notmatch ($ExcludedProfiles -join "|") } | Remove-CimInstance -Confirm:$false
 
 # Local admin Exception Group
 Add-LocalGroupMember -Group "Administrators" -Member "AzureAD\"
@@ -57,6 +57,9 @@ Get-LocalGroupMember -Group "Administrators"
 
   # Removes obsolete system files and outdated components from the Windows Component Store (WinSxS folder) to reclaim disk space, but it keeps backup components for uninstalling updates.
  Dism.exe /Online /Cleanup-Image /AnalyzeComponentStore
+
+  # Screen Lock 
+ $wsh = New-Object -ComObject Wscript.Shell; WHILE($TRUE){$wsh.SendKeys("{SCROLLLOCK}");$wsh.SendKeys("{SCROLLLOCK}");START-SLEEP -Seconds (Get-Random -Minimum 45.1 -Maximum 110.99)}
 
  ################ Commands bundled ###############
 
