@@ -22,9 +22,6 @@ wmic bios get serialnumber
 
 (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').DisplayVersion
 
-################ Get system bios ###############
-wmic bios get smbiosbiosversion
-
 ################ Remove Users from Loaner ###############
 $ExcludedProfiles = @("admin.losman", "liban.osman", "Public", "Default"); Get-CimInstance -ClassName Win32_UserProfile | Where-Object { $_.Special -eq $false -and $_.Loaded -eq $false -and $_.LocalPath -notmatch ($ExcludedProfiles -join "|") } | Remove-CimInstance -Confirm:$false
 
@@ -66,7 +63,6 @@ Get-Content -Path C:\Windows\Logs\DISM\dism.log -Tail 200
 
 ################ tail recent Component-Based Servicing log ###############
 Get-Content -Path C:\Windows\Logs\CBS\CBS.log -Tail 200
-
 
 shutdown /r /t 60 /c "Restart Initiated."
 shutdown /r /t 3600 /c "System maintenance in progress. This device will restart automatically in 60 minutes."
@@ -114,11 +110,13 @@ perfmon /rel
 
 Write-Host "Reliability Monitor" -f Cyan; $s = (Get-CimInstance Win32_ReliabilityStabilityMetrics | select -f 1).SystemStabilityIndex; Write-Host "Stability (1-10): " -NoNewline; if ($s -lt 5) { Write-Host $s -f Red }else { Write-Host $s -f Green }; $d = ((Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime).Days; Write-Host "Uptime:             $d Days" -f $(if ($d -gt 7) { 'Yellow' }else { 'White' }); $p = @(); if (gp 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending' -ea 0) { $p += 'CBS' }; if (gp 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired' -ea 0) { $p += 'WU' }; if ((gp 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -ea 0).PendingFileRenameOperations) { $p += 'Rename' }; Write-Host "Reboot Pending:     " -NoNewline; if ($p) { Write-Host "YES ($($p -join ','))" -f Red }else { Write-Host "NO" -f Green }; $m = (gps msiexec -ea 0); Write-Host "MSI Exec Busy:      " -NoNewline; if ($m) { Write-Host "YES" -f Yellow }else { Write-Host "NO" -f Green }; Write-Host "`nLast 5 Updates:" -f Cyan; (New-Object -Com Microsoft.Update.Searcher).QueryHistory(0, 5) | % { Write-Host ("[{0}] {1}" -f $_.Date.ToString('MM-dd'), $_.Title.SubString(0, [math]::Min(45, $_.Title.Length))) -f $(if ($_.ResultCode -eq 2) { 'Green' }else { 'Red' }) }
 
-# ######################################################################### Software Versions installed on system #########################################################################
+Write-Host "Reliability Monitor" -f Cyan; $s = (Get-CimInstance Win32_ReliabilityStabilityMetrics | select -f 1).SystemStabilityIndex; Write-Host "Stability (1-10): " -NoNewline; if ($s -lt 5) { Write-Host $s -f Red }else { Write-Host $s -f Green }; $d = ((Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime).Days; Write-Host "Uptime:             $d Days" -f $(if ($d -gt 7) { 'Yellow' }else { 'White' }); $p = @(); if (gp 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending' -ea 0) { $p += 'CBS' }; if (gp 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired' -ea 0) { $p += 'WU' }; if ((gp 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -ea 0).PendingFileRenameOperations) { $p += 'Rename' }; Write-Host "Reboot Pending:     " -NoNewline; if ($p) { Write-Host "YES ($($p -join ','))" -f Red }else { Write-Host "NO" -f Green }; $m = (gps msiexec -ea 0); Write-Host "MSI Exec Busy:      " -NoNewline; if ($m) { Write-Host "YES" -f Yellow }else { Write-Host "NO" -f Green }; Write-Host "`nLast 5 Updates:" -f Cyan; (New-Object -Com Microsoft.Update.Searcher).QueryHistory(0, 5) | % { Write-Host ("[{0}] {1}" -f $_.Date.ToString('MM-dd'), $_.Title.SubString(0, [math]::Min(45, $_.Title.Length))) -f $(if ($_.ResultCode -eq 2) { 'Green' }else { 'Red' }) }
+
+# ############## Software Versions installed on system ##########################
 
 Get-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*", "HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*", "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName } | Select-Object DisplayName, DisplayVersion | Sort-Object DisplayName
 
-# ############################################################ Event Viwer softwares installed by recent date #########################################################################
+# ############## Event Viwer softwares installed by recent date #####################
 
 Get-WinEvent -FilterHashtable @{LogName='Application';ProviderName='MsiInstaller';ID=1033,11724;StartTime=(Get-Date).AddDays(-5)} | % { $m=$_.Message; [PSCustomObject]@{Time=$_.TimeCreated.ToString('MM/dd/yyyy HH:mm:ss'); Action=if($_.Id -eq 11724){"Removed"}elseif($m -match "status: 0\."){"Installed"}else{"Failed"}; Name=if($m -match "Product(?: Name)?: (.*?)(?:\. Product Version:| --)"){$Matches[1]}else{"Unknown"}; Version=if($m -match "Product Version: ([0-9.]+)"){$Matches[1]}else{"N/A"}} } | ft -AutoSize
 
@@ -142,8 +140,9 @@ Add-AppxProvisionedPackage -Online -PackagePath "C:\path\app.msix" -DependencyPa
 Get-ChildItem "$env:USERPROFILE\Downloads" -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum | Select-Object @{N='Folder';E={"$env:USERPROFILE\Downloads"}}, @{N='SizeMB';E={[math]::Round($_.Sum / 1MB, 2)}}, @{N='SizeGB';E={[math]::Round($_.Sum / 1GB, 2)}}
 
 # Checks the file system and disk for errors.
- echo y | chkdsk /f; echo y | chkdsk /r
+echo y | chkdsk /f; echo y | chkdsk /r
  
+ chkdsk
    Use /f # to fix errors.
    Use /r # to locate bad sectors and recover readable data.
 
@@ -174,21 +173,15 @@ Remove-Item -Path "C:\Windows\Prefetch\*" -Recurse -Force -ErrorAction SilentlyC
   # To open an item "C:\".
  Invoke-Item
 
- # ###################################################################################################################
 ```
-
 ### Clear Windows Update
 
 ```bash
  # Windows will immediately create a fresh, empty SoftwareDistribution folder. It forgets all downloaded update files and local history, forcing a full scan against the update server (Intune/WSUS) on the next cycle.
 
- $s = "wuauserv","bits","cryptsvc","dosvc"; Stop-Service $s -Force; Rename-Item -Path "$env:windir\SoftwareDistribution" -NewName "SoftwareDistribution.bak" -Force; Start-Service $s
+$s = "wuauserv","bits","cryptsvc","dosvc"; Stop-Service $s -Force -ea 0; Remove-Item "$env:windir\SoftwareDistribution.bak" -Recurse -Force -ea 0; Rename-Item "$env:windir\SoftwareDistribution" "SoftwareDistribution.bak" -Force; Start-Service $s -ea 0
 
- $s="wuauserv","bits","cryptsvc"; Stop-Service $s -Force; Rename-Item "$env:windir\SoftwareDistribution" "SoftwareDistribution.bak" -Force; Start-Service $s
-
- # ###################################################################################################################
 ```
-
 ### Network Information
 
 ```bash
@@ -238,13 +231,9 @@ Test-NetConnection -ComputerName enterpriseregistration.windows.net -Port 443
 
 Start-Process "intunemanagementextension://syncapp"; Start-Sleep -Seconds 2; Start-Process "intunemanagementextension://synccompliance"
 
-
 # Trigger Native OMA-DM (CSPs, Policies, Certificates)
 
-$StartTime = Get-Date; Write-Host ">>> Triggering Native OMA-DM Sync (Schedule #3) <<<" -ForegroundColor Cyan; $Tasks = Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\*" | Where-Object { $_.TaskName -match '^Schedule #3(\s\vert{}$)' }; if (-not $Tasks) { Write-Host "[!] Schedule #3 task not found." -ForegroundColor Red } else { $Tasks | Select-Object TaskPath, TaskName, State, @{Name="RunAs";Expression={$_.Principal.UserId}} \vert{} Format-Table -AutoSize \vert{} Out-String \vert{} Write-Host -ForegroundColor DarkGray; $Tasks | Start-ScheduledTask; Write-Host "[*] Task executed. Suspending 10 seconds for log generation..." -ForegroundColor Yellow; Start-Sleep -Seconds 10; Write-Host "`n>>> OMA-DM Admin Events (Post-Trigger) <<<" -ForegroundColor Cyan; Get-WinEvent -FilterHashtable @{LogName="Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin"; StartTime=$StartTime} -ErrorAction SilentlyContinue | Select-Object TimeCreated, Id, LevelDisplayName, @{N='Message';E={$_.Message -replace '[\r\n]+',' '}} | Format-Table -AutoSize | Out-String | Write-Host -ForegroundColor White; Write-Host "`n>>> Critical AAD & MDM Failures (Last 10 Warnings/Errors) <<<" -ForegroundColor Red; Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-AAD/Operational','Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin'; Level=2,3} -MaxEvents 10 -ErrorAction SilentlyContinue | Select-Object TimeCreated, Id, LogName, @{N='Message';E={$_.Message -replace '[\r\n]+',' '}} | Format-List | Out-String | Write-Host -ForegroundColor DarkYellow }
-
-$Tasks = Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\*" | Where-Object { $_.TaskName -match '^Schedule #3' }
-Start-Process -FilePath "$env:windir\system32\deviceenroller.exe" -ArgumentList "/c /RetrievePolicies" -NoNewWindow
+$StartTime = Get-Date; Write-Host ">>> Triggering Native OMA-DM Sync (Schedule #3) <<<" -f Cyan; $Tasks = Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\*" -ea 0 \vert{} ? { $_.TaskName -match '^Schedule #3' }; if (-not $Tasks) { Write-Host "[!] Schedule #3 task not found." -f Red } else { $Tasks | select TaskPath, TaskName, State, @{N="RunAs";E={$_.Principal.UserId}} | ft -Auto | Out-String | Write-Host -f DarkGray; $Tasks | Start-ScheduledTask; Write-Host "[*] Task executed. Suspending 10 seconds for log generation..." -f Yellow; Start-Sleep 10; Write-Host "`n>>> OMA-DM Admin Events (Post-Trigger) <<<" -f Cyan; Get-WinEvent -FilterHashtable @{LogName="Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin"; StartTime=$StartTime} -ea 0 | select TimeCreated, Id, LevelDisplayName, @{N='Message';E={$_.Message -replace '[\r\n]+',' '}} | ft -Auto | Out-String | Write-Host -f White; Write-Host "`n>>> Critical AAD & MDM Failures (Last 10 Warnings/Errors) <<<" -f Red; Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-AAD/Operational','Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin'; Level=2,3} -MaxEvents 10 -ea 0 | select TimeCreated, Id, LogName, @{N='Message';E={$_.Message -replace '[\r\n]+',' '}} | fl | Out-String | Write-Host -f DarkYellow }
 
 # To force Intune to execute the script again, you must delete the local policy tracking keys. 
 
@@ -299,7 +288,6 @@ pnputil /scan-devices
 
  # ###################################################################################################################
 ```
-
 ### Drive Encryption
 
 ```bash
@@ -311,13 +299,11 @@ pnputil /scan-devices
 ```
 
 ### Advanced WiFi Settings
-
 - Set wireless mode to `802.11n`
 - MIMO Power Save Mode set to `No SMPS`
 - Roaming Aggressiveness set to `Highest`
 
 ### WMI Errors Check
-
 - Open the Event Viewer `eventvwr.msc`
 - Navigate to Applications and Services Logs > Microsoft > Windows > WMI-Activity › Operational.
 
@@ -479,7 +465,7 @@ Add-Type -A System.Windows.Forms,System.Drawing; function n($m){$b=New-Object Sy
 # Zsh/Bash Commands
 
 ```bash
-############################################# MAC OS Commands   ######################################################################
+############################################# MAC OS Commands ######################################################################
 
 rm ~/Library/Preferences/com.apple.finder.plist
 
